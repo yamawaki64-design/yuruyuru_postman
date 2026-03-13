@@ -45,7 +45,7 @@ CHARACTERS = [
 SEND_TRIGGERS = [
     "送っておいて", "送ってください", "送って",
     "おくっておいて", "おくってください", "おくって",
-    "これで送る", "送信して", "お願いします", "おねがいします", "よろしく",
+    "これで送る", "送信して", "よろしく",
 ]
 
 NO_NAME_PATTERNS = ["なし", "なしで", "いらない", "不要", "スキップ", "けっこう", "結構", "いいです", "いいや", "ない"]
@@ -91,6 +91,7 @@ def get_reaction_fallback() -> str:
     return random.choice(REACTION_FALLBACKS)
 
 def parse_letter_json(reply: str) -> Optional[dict]:
+    # Try 1: remove markdown code blocks and parse directly
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", reply.strip())
     try:
         data = json.loads(cleaned)
@@ -98,6 +99,15 @@ def parse_letter_json(reply: str) -> Optional[dict]:
             return data
     except json.JSONDecodeError:
         pass
+    # Try 2: extract JSON object embedded in prose text
+    match = re.search(r'\{.*?"body".*?\}', reply, re.DOTALL)
+    if match:
+        try:
+            data = json.loads(match.group())
+            if "body" in data:
+                return data
+        except json.JSONDecodeError:
+            pass
     return None
 
 def kata_to_hira(text: str) -> str:
@@ -390,6 +400,12 @@ def he(text: str) -> str:
 # 固定ヘッダー
 # ─────────────────────────────────────────────
 def render_fixed_header(selected_chars: list):
+    # ヘッダー高さに合わせてpadding-topを動的に設定
+    pt = "78px" if selected_chars else "52px"
+    st.markdown(
+        f'<style>.block-container{{padding-top:{pt}!important;}}</style>',
+        unsafe_allow_html=True,
+    )
     # 1行目：タイトル＋🐧
     row1 = (
         '<div style="display:flex;justify-content:space-between;align-items:center;">'
@@ -531,14 +547,12 @@ def _render_chat():
         if msg["role"] == "user":
             content = he(msg["content"])
             st.markdown(
-                f'<div style="display:flex;justify-content:flex-end;margin:8px 0;'
-                f'align-items:flex-end;gap:8px;">'
+                f'<div style="display:flex;justify-content:flex-end;margin:8px 0;">'
                 f'<div style="background:#3d6cb5;color:white;'
                 f'border-radius:18px 18px 4px 18px;'
-                f'padding:10px 16px;max-width:78%;font-size:14px;line-height:1.7;'
+                f'padding:10px 16px;max-width:85%;font-size:14px;line-height:1.7;'
                 f'white-space:pre-wrap;word-break:break-word;'
                 f'box-shadow:0 2px 6px rgba(61,108,181,0.25);">{content}</div>'
-                f'<div style="font-size:26px;flex-shrink:0;margin-bottom:2px;">🙂</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -665,15 +679,16 @@ def render_delivering():
         unsafe_allow_html=True,
     )
 
-    # 縦中央寄せのスペーサー
-    st.markdown('<div style="height:22vh;"></div>', unsafe_allow_html=True)
-
     status_box = st.empty()
+    _DELIVER_STATUS_STYLE = (
+        'position:fixed;top:42%;left:0;right:0;'
+        'text-align:center;z-index:997;pointer-events:none;'
+    )
 
     def run_animation():
         if is_penkun:
             status_box.markdown(
-                '<div style="text-align:center;">'
+                f'<div style="{_DELIVER_STATUS_STYLE}">'
                 '<span style="font-size:1.5em;font-weight:700;color:#2c7a9a;">配達中... 🐧 ✉️</span><br>'
                 '<span style="color:#5a9ab5;font-size:0.95em;">ゆるゆる郵便局へ…</span>'
                 '</div>',
@@ -681,7 +696,7 @@ def render_delivering():
             )
             time.sleep(1.2)
             status_box.markdown(
-                '<div style="text-align:center;">'
+                f'<div style="{_DELIVER_STATUS_STYLE}">'
                 '<span style="font-size:1.5em;font-weight:700;color:#2c7a9a;">……あれ？ 😱</span><br>'
                 '<span style="color:#5a9ab5;font-size:0.95em;">この宛先…ぼく…？！</span>'
                 '</div>',
@@ -689,7 +704,7 @@ def render_delivering():
             )
             time.sleep(1.0)
             status_box.markdown(
-                '<div style="text-align:center;">'
+                f'<div style="{_DELIVER_STATUS_STYLE}">'
                 '<span style="font-size:1.5em;font-weight:700;color:#2c7a9a;">（こっそりポストへ）</span><br>'
                 '<span style="color:#5a9ab5;font-size:0.95em;">///  …受け取りました  ///</span>'
                 '</div>',
@@ -698,7 +713,7 @@ def render_delivering():
             time.sleep(0.8)
         else:
             status_box.markdown(
-                f'<div style="text-align:center;">'
+                f'<div style="{_DELIVER_STATUS_STYLE}">'
                 f'<span style="font-size:1.5em;font-weight:700;color:#2c7a9a;">配達中... 🐧 ✉️</span><br>'
                 f'<span style="color:#5a9ab5;font-size:0.95em;">'
                 f'{current_char["emoji"]} {current_char["name"]}のおうちへ！</span>'
@@ -707,7 +722,7 @@ def render_delivering():
             )
             time.sleep(2.0)
             status_box.markdown(
-                f'<div style="text-align:center;">'
+                f'<div style="{_DELIVER_STATUS_STYLE}">'
                 f'<span style="font-size:1.5em;font-weight:700;color:#2c7a9a;">'
                 f'{current_char["house"]} 到着！</span><br>'
                 f'<span style="color:#5a9ab5;font-size:0.95em;">'
@@ -872,11 +887,13 @@ def render_returning():
     )
     render_fixed_header([])
 
-    st.markdown('<div style="height:22vh;"></div>', unsafe_allow_html=True)
-
     box = st.empty()
+    _RETURN_STATUS_STYLE = (
+        'position:fixed;top:42%;left:0;right:0;'
+        'text-align:center;z-index:997;pointer-events:none;'
+    )
     box.markdown(
-        '<div style="text-align:center;">'
+        f'<div style="{_RETURN_STATUS_STYLE}">'
         '<span style="font-size:1.5em;font-weight:700;color:#6b5b9a;">配達完了！🎉</span><br>'
         '<span style="color:#9a88cc;font-size:0.95em;">ゆるゆる郵便局に帰ります🏣</span>'
         '</div>',
@@ -884,7 +901,7 @@ def render_returning():
     )
     time.sleep(1.5)
     box.markdown(
-        '<div style="text-align:center;">'
+        f'<div style="{_RETURN_STATUS_STYLE}">'
         '<span style="font-size:1.5em;font-weight:700;color:#6b5b9a;">ただいま〜！🐧</span><br>'
         '<span style="color:#9a88cc;font-size:0.95em;">次のお手紙も待ってるよ✉️</span>'
         '</div>',
@@ -925,10 +942,14 @@ def main():
         header { visibility: hidden; }
         footer { visibility: hidden; }
 
-        /* 固定ヘッダー分の上余白（2行分を確保） */
+        /* 固定ヘッダー分の上余白はrender_fixed_headerで動的に設定 */
         .block-container {
-            padding-top: 90px !important;
-            padding-bottom: 0.5rem;
+            padding-bottom: 5rem !important;
+        }
+
+        /* iPhone Safari の「Manage app」ボタン分の余白 */
+        .stBottom {
+            padding-bottom: 48px !important;
         }
 
         /* ボタン共通 */
