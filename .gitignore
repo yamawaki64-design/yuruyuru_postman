@@ -1,0 +1,18 @@
+# APIキー管理ファイル
+secrets.toml
+.streamlit/secrets.toml
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# VSCode
+.vscode/
+
+# 参考ファイル
+yuruyuru-postman-v8.jsx
