@@ -137,6 +137,10 @@ def detect_characters_in_text(text: str) -> list:
 def get_groq_client():
     return Groq(api_key=st.secrets["GROQ_KEY"])
 
+def sanitize_text(text: str) -> str:
+    """lone surrogate（U+D800〜U+DFFF）を除去してUTF-8安全な文字列に変換"""
+    return ''.join(c for c in text if ord(c) < 0xD800 or ord(c) > 0xDFFF)
+
 def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -> str:
     client = get_groq_client()
     for attempt in range(retries + 1):
@@ -146,7 +150,7 @@ def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -
                 messages=[{"role": "system", "content": system_prompt}] + messages,
                 max_tokens=1000,
             )
-            return response.choices[0].message.content
+            return sanitize_text(response.choices[0].message.content)
         except RateLimitError:
             if attempt < retries:
                 time.sleep(1.5 * (attempt + 1))
@@ -361,15 +365,16 @@ def handle_user_input(text: str):
     # JSON 手紙抽出
     parsed = parse_letter_json(reply_clean)
     if parsed:
-        st.session_state.draft_letter_body = parsed["body"]
+        body = sanitize_text(parsed["body"])
+        st.session_state.draft_letter_body = body
         st.session_state.chat_history.append({
             "role": "assistant",
-            "content": parsed.get("pre", ""),
-            "letter_body": parsed["body"],
-            "post": parsed.get("post", ""),
+            "content": sanitize_text(parsed.get("pre", "")),
+            "letter_body": body,
+            "post": sanitize_text(parsed.get("post", "")),
         })
     else:
-        st.session_state.chat_history.append({"role": "assistant", "content": reply_clean})
+        st.session_state.chat_history.append({"role": "assistant", "content": sanitize_text(reply_clean)})
 
     # [DELIVER] → 確認ボタン表示のみ
     if deliver_tag:
@@ -870,15 +875,14 @@ def render_returning():
         <style>
         .stApp { background-color: #ede8f7 !important; }
         @keyframes penReturn {
-            0%   { left: 110%; opacity: 0; }
-            8%   { opacity: 1; }
-            92%  { opacity: 1; }
-            100% { left: -60px; opacity: 0; }
+            0%   { left: 110%; opacity: 0; transform: scaleX(-1); }
+            8%   { opacity: 1;              transform: scaleX(-1); }
+            92%  { opacity: 1;              transform: scaleX(-1); }
+            100% { left: -60px; opacity: 0; transform: scaleX(-1); }
         }
         .pen-return {
             position: fixed; bottom: 40px; font-size: 48px;
             animation: penReturn 3.2s linear forwards; z-index: 999;
-            transform: scaleX(-1);
         }
         </style>
         <div class="pen-return">🐧</div>

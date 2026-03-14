@@ -189,9 +189,11 @@ defaults = {
 SEND_TRIGGERS = [
     "送っておいて", "送ってください", "送って",
     "おくっておいて", "おくってください", "おくって",
-    "これで送る", "送信して", "お願いします", "おねがいします", "よろしく",
+    "これで送る", "送信して", "よろしく",
 ]
 ```
+
+⚠️ **「お願いします」「おねがいします」は除外済み。** 手紙作成依頼（「書いてお願いします」等）でも誤トリガーしやすいため削除。
 
 **二段階方式：**
 - SEND_TRIGGERS → 直接配達（確認ボタンなし）
@@ -227,6 +229,10 @@ AIへのJSON指定（3フィールド）：
 
 - パース成功時：`draft_letter_body = parsed["body"]`を更新。`chat_history`に`letter_body`・`post`フィールド付きで追記
 - パース失敗時：`draft_letter_body`は前回の値を保持。`reply_clean`をそのまま`chat_history`に追加
+
+**Try 1が失敗した場合のフォールバック（Try 2）：**
+Groqが散文テキスト+JSONを混在させて返す（例：「先輩への丁寧なメールになりそうですね！{"pre":...,"body":...}`）場合に対応。
+`re.search(r'\{.*?"body".*?\}', reply, re.DOTALL)` でJSON部分を抽出して再パースする。
 
 ### 6-3. 送り主名前の取得フロー
 
@@ -387,9 +393,14 @@ st.set_page_config(page_title="ゆるゆる郵便屋さん", page_icon="🐧", l
 グローバルCSS（`main()`で注入）：
 - Noto Sans JP（Google Fonts）
 - `#MainMenu`, `header`, `footer` を `visibility: hidden`（Streamlitメニュー非表示）
-- `.block-container { padding-top: 90px !important; }`（固定ヘッダー2行分の余白）
+- `.block-container { padding-bottom: 5rem !important; }`（下部余白）
+- `.stBottom { padding-bottom: 48px !important; }`（iPhone Safari の「Manage app」ボタン分の余白）
 - `[data-testid="stChatInput"]` に白背景 + `#7aadcc`ボーダー（入力欄を見やすく）
 - `.stBottom > div` の背景色を `#e4f0fa`に合わせる
+
+**padding-topはグローバルCSSに書かず、`render_fixed_header()`内で動的に注入する：**
+- 宛先バッジあり → `78px`
+- 宛先バッジなし → `52px`（delivering/received/returning画面も含む）
 
 ### 固定ヘッダー（`render_fixed_header`）
 
@@ -400,8 +411,9 @@ st.set_page_config(page_title="ゆるゆる郵便屋さん", page_icon="🐧", l
 ### チャット吹き出し（カスタムHTML）
 
 ```
-ユーザー：右寄せ、青（#3d6cb5）背景、白文字、border-radius: 18px 18px 4px 18px
-ペンくん：左寄せ、白背景、border-radius: 18px 18px 18px 4px
+ユーザー：右寄せ、青（#3d6cb5）背景、白文字、border-radius: 18px 18px 4px 18px、max-width:85%
+         アイコンなし（🙂はiPhoneで怖い顔になるため削除）
+ペンくん：左寄せ、白背景、border-radius: 18px 18px 18px 4px、🐧アイコン付き
 手紙本文：薄黄色（#fffde7）、左側オレンジボーダー（#f9a825）のカード内に📄アイコン付き
 postフィールド：グレーテキスト（#555）で本文カード下に表示
 ```
@@ -416,6 +428,7 @@ postフィールド：グレーテキスト（#555）で本文カード下に表
 - CSSアニメ `penRun`：左から右へペンくんが走る（3.2秒、`position:fixed; bottom:40px`）
 - CSSアニメ `letterFloat`：手紙が上下に揺れながら右へ移動（3.2秒、`position:fixed; bottom:90px`）
 - テキストは `st.empty()` + `status_box.markdown()` で動的更新
+- テキストコンテナは `position:fixed; top:42%` で固定（スクロールしても常に画面中央に表示）
 
 ### 受取画面（`render_received`）
 
@@ -427,6 +440,7 @@ postフィールド：グレーテキスト（#555）で本文カード下に表
 
 - 背景：`#ede8f7`（ラベンダー）
 - CSSアニメ `penReturn`：右から左へペンくんが走る（`transform: scaleX(-1)`で反転）
+- テキストコンテナは `position:fixed; top:42%` で固定（配達中と同様）
 - 帰宅後に全セッション変数をリセット（`sender_name`のみ引き継ぎ）
 
 ---
@@ -457,3 +471,4 @@ postフィールド：グレーテキスト（#555）で本文カード下に表
 | v7 | Groqエラーハンドリング追加。`[DELIVER]`確認ボタン方式。`draft_letter_body`セッション管理 |
 | v8 | ペンくんをキャラクターとして追加。配達中3段階テキスト演出。ペンくん専用感想プロンプト |
 | Streamlit版 | Groq API + Streamlit単一ファイル実装。JSON手紙抽出（`---`形式から変更）。カスタムHTML吹き出し。固定ヘッダー2行構造。CSSアニメーション（左→右配達、右→左帰宅）。2人配達後タブ切替。`extract_sender_name`語尾除去。`[DELIVER]`過検出防止。`sender_name`帰宅後引き継ぎ。入力欄スタイリング |
+| iPhone対応版 | ヘッダー下余白をpadding-top動的制御に変更。入力欄下にManage appボタン分の余白追加。配達中・帰宅テキストをposition:fixed化（スクロール位置非依存）。`parse_letter_json`にTry2（テキスト混在JSON抽出）追加。ユーザーアイコン🙂削除（iPhone Safari表示問題）。SEND_TRIGGERSから「お願いします」「おねがいします」を除外 |
