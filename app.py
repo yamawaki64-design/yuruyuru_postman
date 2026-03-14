@@ -657,10 +657,10 @@ def render_delivering():
         <style>
         .stApp { background: linear-gradient(180deg, #b8ddf0 0%, #c8e8b8 100%) !important; }
         @keyframes penRun {
-            0%   { left: -60px; opacity: 0; }
-            8%   { opacity: 1; }
-            92%  { opacity: 1; }
-            100% { left: 110%; opacity: 0; }
+            0%   { left: -60px; opacity: 0; transform: scaleX(-1); }
+            8%   { opacity: 1;              transform: scaleX(-1); }
+            92%  { opacity: 1;              transform: scaleX(-1); }
+            100% { left: 110%; opacity: 0;  transform: scaleX(-1); }
         }
         .pen-run {
             position: fixed; bottom: 40px; font-size: 48px;
@@ -875,10 +875,10 @@ def render_returning():
         <style>
         .stApp { background-color: #ede8f7 !important; }
         @keyframes penReturn {
-            0%   { left: 110%; opacity: 0; transform: scaleX(-1); }
-            8%   { opacity: 1;              transform: scaleX(-1); }
-            92%  { opacity: 1;              transform: scaleX(-1); }
-            100% { left: -60px; opacity: 0; transform: scaleX(-1); }
+            0%   { left: 110%; opacity: 0; }
+            8%   { opacity: 1; }
+            92%  { opacity: 1; }
+            100% { left: -60px; opacity: 0; }
         }
         .pen-return {
             position: fixed; bottom: 40px; font-size: 48px;
