@@ -138,7 +138,8 @@ def get_groq_client():
     return Groq(api_key=st.secrets["GROQ_KEY"])
 
 def sanitize_text(text: str) -> str:
-    """lone surrogate（U+D800〜U+DFFF）を除去してUTF-8安全な文字列に変換"""
+    """推論モデルのthinkingブロック除去 + lone surrogate（U+D800〜U+DFFF）を除去してUTF-8安全な文字列に変換"""
+    text = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", text, flags=re.DOTALL)
     return ''.join(c for c in text if ord(c) < 0xD800 or ord(c) > 0xDFFF)
 
 def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -> str:
@@ -146,9 +147,10 @@ def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -
     for attempt in range(retries + 1):
         try:
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": system_prompt}] + messages,
-                max_tokens=1000,
+                max_tokens=1024,
+                reasoning_effort="low",
             )
             return sanitize_text(response.choices[0].message.content)
         except RateLimitError:

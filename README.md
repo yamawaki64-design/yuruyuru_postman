@@ -74,7 +74,7 @@
 | 要素 | 内容 |
 |------|------|
 | フレームワーク | [Streamlit](https://streamlit.io/) |
-| AI | [Groq API](https://groq.com/)（llama-3.3-70b-versatile） |
+| AI | [Groq API](https://groq.com/)（openai/gpt-oss-120b） |
 | 言語 | Python 3.x |
 | デプロイ | Streamlit Community Cloud |
 | 外部API連携 | なし |

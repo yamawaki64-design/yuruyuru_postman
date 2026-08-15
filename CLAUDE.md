@@ -21,7 +21,7 @@ Claude Code向け引き継ぎドキュメント
 | 項目 | 内容 |
 |---|---|
 | フレームワーク | Streamlit |
-| AIモデル | Groq API（モデル: `llama-3.3-70b-versatile`） |
+| AIモデル | Groq API（モデル: `openai/gpt-oss-120b`） |
 | ファイル構成 | `app.py`（単一ファイル、約970行） |
 | デプロイ先 | Streamlit Community Cloud |
 
@@ -316,21 +316,29 @@ AIの返答に`[DELIVER]`が含まれていた場合：
 
 ## 8. Groqクライアント
 
+`openai/gpt-oss-120b`（推論モデル）を使用。移行時の注意点は `docs/GROQ_MODEL_MIGRATION.md`（ゆるゆるシリーズ共通）を参照。
+
 ```python
 @st.cache_resource
 def get_groq_client():
     return Groq(api_key=st.secrets["GROQ_KEY"])
+
+def sanitize_text(text: str) -> str:
+    """推論モデルのthinkingブロック除去 + lone surrogate（U+D800〜U+DFFF）を除去してUTF-8安全な文字列に変換"""
+    text = re.sub(r"<think(?:ing)?>.*?</think(?:ing)?>", "", text, flags=re.DOTALL)
+    return ''.join(c for c in text if ord(c) < 0xD800 or ord(c) > 0xDFFF)
 
 def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -> str:
     client = get_groq_client()
     for attempt in range(retries + 1):
         try:
             response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
                 messages=[{"role": "system", "content": system_prompt}] + messages,
-                max_tokens=1000,
+                max_tokens=1024,
+                reasoning_effort="low",
             )
-            return response.choices[0].message.content
+            return sanitize_text(response.choices[0].message.content)
         except (RateLimitError, APIError):
             if attempt < retries:
                 time.sleep(1.5 * (attempt + 1))
@@ -338,6 +346,11 @@ def call_groq_with_retry(messages: list, system_prompt: str, retries: int = 2) -
             raise
     return ""
 ```
+
+⚠️ **推論モデル固有の注意点**（`openai/gpt-oss-*`）：
+- `max_tokens` は推論＋回答の合計で消費される。小さすぎると（200等）推論だけで使い切り`content`が空になる → 1024以上を確保
+- 文字数制限のあるプロンプト（本アプリでは感想生成の「80〜130字程度」）は、モデルが1文字ずつ数える思考ログを延々出力しがちなので `reasoning_effort="low"` で抑制する
+- モデルによっては`<think>...</think>`がcontentに混入することがあるため、`sanitize_text`で除去してから`parse_letter_json`等に渡す
 
 ---
 
@@ -472,3 +485,4 @@ postフィールド：グレーテキスト（#555）で本文カード下に表
 | v8 | ペンくんをキャラクターとして追加。配達中3段階テキスト演出。ペンくん専用感想プロンプト |
 | Streamlit版 | Groq API + Streamlit単一ファイル実装。JSON手紙抽出（`---`形式から変更）。カスタムHTML吹き出し。固定ヘッダー2行構造。CSSアニメーション（左→右配達、右→左帰宅）。2人配達後タブ切替。`extract_sender_name`語尾除去。`[DELIVER]`過検出防止。`sender_name`帰宅後引き継ぎ。入力欄スタイリング |
 | iPhone対応版 | ヘッダー下余白をpadding-top動的制御に変更。入力欄下にManage appボタン分の余白追加。配達中・帰宅テキストをposition:fixed化（スクロール位置非依存）。`parse_letter_json`にTry2（テキスト混在JSON抽出）追加。ユーザーアイコン🙂削除（iPhone Safari表示問題）。SEND_TRIGGERSから「お願いします」「おねがいします」を除外 |
+| Groqモデル移行版 | `llama-3.3-70b-versatile`（廃止予定）から`openai/gpt-oss-120b`（推論モデル）へ移行。`max_tokens`を1000→1024に引き上げ、`reasoning_effort="low"`を追加。`sanitize_text`に`<think>`/`<thinking>`ブロック除去を追加 |
